@@ -12,6 +12,8 @@
 extern xTaskHandle xDumpHandle;			                //task handle for dump task
 extern xSemaphoreHandle xDumpLock;                      // this global lock is defined once in TRXVU.c
 extern time_unix 		g_transponder_end_time;			// time at which the transponder mode will end
+extern time_unix 		g_max_transponder_time;			// time at which the transponder mode will end
+extern time_unix 		g_mute_end_time;			// time at which the transponder mode will end
 
 static dump_arguments_t dmp_pckt;
 
@@ -43,7 +45,11 @@ void DumpTask(void *args) {
 		numOfElementsSent = readTLMFileTimeRange(task_args->dump_type,task_args->t_start,task_args->t_end,task_args->cmd.ID,task_args->resulotion);
 	}
 
-	FinishDump(task_args, NULL, ACK_DUMP_FINISHED, &numOfElementsSent, sizeof(numOfElementsSent));
+	if (numOfElementsSent<0){
+		FinishDump(task_args, NULL, ACK_ERROR_MSG, &numOfElementsSent, sizeof(numOfElementsSent));
+	}else{
+		FinishDump(task_args, NULL, ACK_DUMP_FINISHED, &numOfElementsSent, sizeof(numOfElementsSent));
+	}
 	vTaskDelete(NULL); // kill the dump task
 
 }
@@ -54,11 +60,11 @@ int CMD_AntennaDeploy(sat_packet_t *cmd)
 	return 0; // TODO RBF - now that we have the ANT installed, want to make sure we don't deploy by mistake
 	/*
 	int err = logError(IsisAntS_setArmStatus(ISIS_TRXVU_I2C_BUS_INDEX , isisants_sideA, isisants_arm) ,"CMD_AntennaDeploy-IsisAntS_setArmStatus-A");
-	if (err != E_NO_SS_ERR)
+	if (err == E_NO_SS_ERR)
 		logError(IsisAntS_autoDeployment(ISIS_TRXVU_I2C_BUS_INDEX, isisants_sideA,ANTENNA_DEPLOYMENT_TIMEOUT) ,"CMD_AntennaDeploy-IsisAntS_autoDeployment-A");
 
 	logError(IsisAntS_setArmStatus(ISIS_TRXVU_I2C_BUS_INDEX , isisants_sideB, isisants_arm) ,"CMD_AntennaDeploy-IsisAntS_setArmStatus-B");
-	if (err != E_NO_SS_ERR)
+	if (err == E_NO_SS_ERR)
 		logError(IsisAntS_autoDeployment(ISIS_TRXVU_I2C_BUS_INDEX, isisants_sideB,ANTENNA_DEPLOYMENT_TIMEOUT),"CMD_AntennaDeploy-IsisAntS_autoDeployment-B");
 
 
@@ -94,6 +100,11 @@ int CMD_StartDump(sat_packet_t *cmd)
 
 	memcpy(&dmp_pckt.t_end, cmd->data + offset, sizeof(dmp_pckt.t_end));
 	offset += sizeof(dmp_pckt.t_end);
+
+	// check for invalid dump parametrs
+	if (dmp_pckt.t_start>=dmp_pckt.t_end){
+		return E_INVALID_PARAMETERS; // exit with error
+	}
 
 	memcpy(&dmp_pckt.resulotion, cmd->data + offset, sizeof(dmp_pckt.resulotion));
 
@@ -141,16 +152,22 @@ int CMD_SetTransponder(sat_packet_t *cmd)
 	err = I2C_write(I2C_TRXVU_TC_ADDR, data, 2);
 
 	if(data[1] == trxvu_transponder_on){
-		SetIdleState(trxvu_idle_state_off, 0);
-		memcpy(&duration,cmd->data + sizeof(char),sizeof(duration));
 		time_unix curr_tick_time = 0;
 		Time_getUnixEpoch(&curr_tick_time);
+		if (curr_tick_time < g_mute_end_time) return TRXVU_TRANSPONDER_WHILE_MUTE;
+		SetIdleState(trxvu_idle_state_off, 0);
+		memcpy(&duration,cmd->data + sizeof(char),sizeof(duration));
+		if(duration > g_max_transponder_time) return TRXVU_TRANSPONDER_TOO_LONG;
+
 		g_transponder_end_time = curr_tick_time + duration;
 
 	}else if (data[1] == trxvu_transponder_off){
 		g_transponder_end_time = 0;
 
-	}else SendAckPacket(ACK_ERROR_MSG,cmd,NULL,0);
+	}else {
+		err = E_INVALID_PARAMETERS;
+		SendAckPacket(ACK_ERROR_MSG, cmd, (unsigned char*) &err, sizeof(err));
+	}
 
 	if (err == E_NO_SS_ERR)
 		SendAckPacket(ACK_COMD_EXEC,cmd,NULL,0);
@@ -181,6 +198,12 @@ int CMD_MuteTRXVU(sat_packet_t *cmd)
 	int err = 0;
 	time_unix mute_duaration = 0;
 	memcpy(&mute_duaration,cmd->data,sizeof(mute_duaration));
+	SetIdleState(trxvu_idle_state_off, 0);
+
+	g_transponder_end_time = 0;
+	int data[2] = {0x38, trxvu_transponder_off};
+	I2C_write(I2C_TRXVU_TC_ADDR, data, 2);
+
 	err = muteTRXVU(mute_duaration);
 	if (err == E_NO_SS_ERR){
 		SendAckPacket(ACK_COMD_EXEC,cmd,NULL,0); //trying to add the ack functions
@@ -196,6 +219,8 @@ int CMD_SetIdleState(sat_packet_t *cmd)
 	if (state == trxvu_idle_state_on){
 		time_unix curr_tick_time = 0;
 		Time_getUnixEpoch(&curr_tick_time);
+
+		if (curr_tick_time < g_mute_end_time) return TRXVU_IDEL_WHILE_MUTE;
 
 		if(g_transponder_end_time > curr_tick_time){
 			return TRXVU_IDLE_WHILE_TRANSPONDER;

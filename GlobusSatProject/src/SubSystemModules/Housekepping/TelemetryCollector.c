@@ -147,7 +147,7 @@ void TelemetrySaveEPS()
 
 	if (logError(isis_eps__gethousekeepingeng__tm(EPS_I2C_BUS_INDEX, &tlm_mb_eng) ,"TelemetrySaveEPS-isis_eps__gethousekeepingeng__tm") == 0)
 	{
-		write2File(&tlm_mb_eng , tlm_eps_eng_mb);
+		write2File(&tlm_mb_eng , tlm_eps);
 	}
 
 
@@ -309,5 +309,8 @@ void GetCurrentWODTelemetry(WOD_Telemetry_t *wod)
 	wod->number_of_resets = reset;
 	err = FRAM_read(&reset,NUMBER_OF_CMD_RESETS_ADDR, NUMBER_OF_CMD_RESETS_SIZE);
 	wod->num_of_cmd_resets = reset;
+
+	wod->sat_uptime = Time_getUptimeSeconds();
+
 }
 

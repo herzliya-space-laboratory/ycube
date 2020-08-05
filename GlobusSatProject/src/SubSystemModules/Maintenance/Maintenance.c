@@ -4,6 +4,13 @@
 #include <hcc/api_fat.h>
 
 #include <hal/Timing/Time.h>
+#include "TestingConfigurations.h"
+#ifdef ISISEPS
+	#include <satellite-subsystems/isis_eps_driver.h>
+#endif
+#ifdef GOMEPS
+	#include <satellite-subsystems/GomEPS.h>
+#endif
 
 #include "GlobalStandards.h"
 
@@ -112,7 +119,7 @@ void ResetGroundCommWDT()
 }
 
 // check if last communication with the ground station has passed WDT kick time
-// and return a boolean describing it.
+// return TRUE if we past wdt_kick_thresh
 Boolean IsGroundCommunicationWDTKick()
 {
 	time_unix current_time = 0;
@@ -171,10 +178,8 @@ int DeleteOldFiels(int minFreeSpace){
 			int err = deleteTLMFile(tlm_wod,theDay,numOfDays);
 			err *= deleteTLMFile(tlm_antenna,theDay,numOfDays);
 			err *= deleteTLMFile(tlm_eps,theDay,numOfDays);
-			err *= deleteTLMFile(tlm_eps_eng_cdb,theDay,numOfDays);
-			err *= deleteTLMFile(tlm_eps_eng_mb,theDay,numOfDays);
-			err *= deleteTLMFile(tlm_eps_raw_cdb,theDay,numOfDays);
-			err *= deleteTLMFile(tlm_eps_raw_mb,theDay,numOfDays);
+			err *= deleteTLMFile(tlm_eps_raw_cdb_NOT_USED,theDay,numOfDays);
+			err *= deleteTLMFile(tlm_eps_raw_mb_NOT_USED,theDay,numOfDays);
 			err *= deleteTLMFile(tlm_log,theDay,numOfDays);
 			err *= deleteTLMFile(tlm_rx,theDay,numOfDays);
 			err *= deleteTLMFile(tlm_rx_frame,theDay,numOfDays);
@@ -208,14 +213,29 @@ void DeployAnt(){
 	}
 }
 
+int HardResetMCU(){
+	isis_eps__reset__to_t cmd_t;
+	isis_eps__reset__from_t cmd_f;
+	cmd_t.fields.rst_key = RESET_KEY;
+	logError(isis_eps__reset__tmtc(EPS_I2C_BUS_INDEX, &cmd_t, &cmd_f),"CMD_ResetComponent-isis_eps__reset__tmtc");
+}
+
 void Maintenance()
 {
-	SaveSatTimeInFRAM(MOST_UPDATED_SAT_TIME_ADDR,
-	MOST_UPDATED_SAT_TIME_SIZE);
+	SaveSatTimeInFRAM(MOST_UPDATED_SAT_TIME_ADDR,MOST_UPDATED_SAT_TIME_SIZE);
 
 	//logError(IsFS_Corrupted());-> we send corrupted bytes over beacon, no need to log in error file all the time
 
-	logError(IsGroundCommunicationWDTKick(),"Maintenance-IsGroundCommunicationWDTKick");
+	// check if for too long we didn't got any comm from ground, and reset TRXVU and sat if needed
+	if (IsGroundCommunicationWDTKick()){
+		logError(INFO_MSG,"Maintenance-WDTKick, going to restart systems");
+		ResetGroundCommWDT(); // to make sure we don't get into endless restart loop
+		// hard reset the TRXVU
+		logError(IsisTrxvu_hardReset(ISIS_TRXVU_I2C_BUS_INDEX),"Maintenance-IsisTrxvu_hardReset");
+		vTaskDelay(500);
+		SaveSatTimeInFRAM(MOST_UPDATED_SAT_TIME_ADDR,MOST_UPDATED_SAT_TIME_SIZE);// store the most updated sat time
+		HardResetMCU();
+	}
 
 	DeleteOldFiels(MIN_FREE_SPACE);
 

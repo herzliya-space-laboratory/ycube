@@ -10,12 +10,6 @@
 
 #include <satellite-subsystems/IsisTRXVU.h>
 #include <satellite-subsystems/IsisAntS.h>
-#ifdef ISISEPS
-	#include <satellite-subsystems/isis_eps_driver.h>
-#endif
-#ifdef GOMEPS
-	#include <satellite-subsystems/GomEPS.h>
-#endif
 
 
 #include <hcc/api_fat.h>
@@ -28,8 +22,6 @@
 #include "SubSystemModules/Communication/AckHandler.h"
 #include "SubSystemModules/Maintenance/Maintenance.h"
 #include "Maintanence_Commands.h"
-
-#define RESET_KEY 0xA6 // need to send this key to the reset command otherwise reset will not happen
 
 // data in SPL should be: slaveaddr,size of data to get back from the I2C command ,data to sent to I2C
 // TODO: how to test this function??
@@ -71,18 +63,12 @@ int CMD_FRAM_ReadAndTransmitt(sat_packet_t *cmd)
 	memcpy(&addr, cmd->data, sizeof(addr));
 	memcpy(&size, cmd->data + sizeof(addr),sizeof(size));
 
-	unsigned char *read_data = malloc(size);
-	if(NULL == read_data){
-		return E_MEM_ALLOC;
-	}
-
-	int i=0;
-	err = FRAM_read((unsigned char*)&i, addr, size); // TODO: ask why using read_data doesn't work
+	int data=0;
+	err = FRAM_read((unsigned char*)&data, addr, size);
 	if (err == E_NO_SS_ERR){
-		TransmitDataAsSPL_Packet(cmd, &i, size);
+		TransmitDataAsSPL_Packet(cmd, &data, size);
 	}
 
-	free(read_data);
 	return err;
 }
 
@@ -105,7 +91,7 @@ int CMD_FRAM_WriteAndTransmitt(sat_packet_t *cmd)
 	}
 	err = FRAM_read(data, addr, length - sizeof(addr));
 	if (err == E_NO_SS_ERR){
-		TransmitDataAsSPL_Packet(cmd, data, length);
+		TransmitDataAsSPL_Packet(cmd, data, length - sizeof(addr));
 	}
 	return err;
 }
@@ -165,6 +151,7 @@ int CMD_UpdateSatTime(sat_packet_t *cmd)
 	{
 		TransmitDataAsSPL_Packet(cmd, (unsigned char*)&set_time, sizeof(set_time));
 	}
+	ResetGroundCommWDT();// make sure the CommWDT is in sync with the new time
 	return err;
 }
 
@@ -250,10 +237,7 @@ int CMD_ResetComponent(sat_packet_t *cmd)
 		SendAckPacket(ACK_EPS_RESET, cmd, NULL, 0);
 		FRAM_write(&reset_flag, RESET_CMD_FLAG_ADDR, RESET_CMD_FLAG_SIZE);
 		vTaskDelay(10);
-		isis_eps__reset__to_t cmd_t;
-		isis_eps__reset__from_t cmd_f;
-		cmd_t.fields.rst_key = RESET_KEY;
-		logError(isis_eps__reset__tmtc(EPS_I2C_BUS_INDEX, &cmd_t, &cmd_f),"CMD_ResetComponent-isis_eps__reset__tmtc");
+		HardResetMCU();
 		break;
 
 	case reset_trxvu_hard:

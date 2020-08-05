@@ -91,6 +91,7 @@ void WriteDefaultValuesToFRAM()
 	FRAM_write((unsigned char*) &flag,
 			STOP_REDEPOLOY_FLAG_ADDR, STOP_REDEPOLOY_FLAG_SIZE);
 
+	ResetGroundCommWDT();
 }
 
 int StartFRAM()
@@ -111,20 +112,21 @@ int StartSPI()
 int StartTIME()
 {
 	int error = 0;
-		Time expected_deploy_time = UNIX_DATE_JAN_D1_Y2000;
-		error = Time_start(&expected_deploy_time, 0);
-		if (0 != error) {
-			return logError(error ,"StartTIME-Time_start");
-		}
-		time_unix time_before_wakeup = 0;
-		if (!isFirstActivation()) {
-			FRAM_read((unsigned char*) &time_before_wakeup,
-			MOST_UPDATED_SAT_TIME_ADDR, MOST_UPDATED_SAT_TIME_SIZE);
+	Time expected_deploy_time = UNIX_DATE_JAN_D1_Y2000;
+	error = Time_start(&expected_deploy_time, 0);
+	if (0 != error) {
+		return logError(error ,"StartTIME-Time_start");
+	}
+	// udpate to sat time that we had before the restart in FRAM
+	time_unix time_before_wakeup = 0;
+	if (!isFirstActivation()) {
+		FRAM_read((unsigned char*) &time_before_wakeup,
+		MOST_UPDATED_SAT_TIME_ADDR, MOST_UPDATED_SAT_TIME_SIZE);
 
-			Time_setUnixEpoch(time_before_wakeup);
-		}
+		Time_setUnixEpoch(time_before_wakeup + RESTART_TIME); // set the last time we had + time it takes to restart the sat
+	}
 
-		return 0;
+	return 0;
 }
 
 int DeploySystem()
@@ -142,24 +144,23 @@ int DeploySystem()
 	int err = 0;
 
 	time_unix seconds_since_deploy = 0;
-	err = logError(FRAM_read((unsigned char*) seconds_since_deploy , SECONDS_SINCE_DEPLOY_ADDR , SECONDS_SINCE_DEPLOY_SIZE) ,"DeploySystem-FRAM_read");
-	if (0 != err) {
-		seconds_since_deploy = MINUTES_TO_SECONDS(MIN_2_WAIT_BEFORE_DEPLOY);	// RBF to 30 min
+	err = logError(FRAM_read((unsigned char*) &seconds_since_deploy , SECONDS_SINCE_DEPLOY_ADDR , SECONDS_SINCE_DEPLOY_SIZE) ,"DeploySystem-FRAM_read");
+	if (err == E_NO_SS_ERR) {
+		seconds_since_deploy = 0;
 	}
 
 	// wait 30 min + log telm
 	while (seconds_since_deploy < MINUTES_TO_SECONDS(MIN_2_WAIT_BEFORE_DEPLOY)) { // RBF to 30 min
+		// wait 10 sec and update timer in FRAM
 		vTaskDelay(SECONDS_TO_TICKS(10));
+		seconds_since_deploy += 10;
+		logError(FRAM_write((unsigned char*)&seconds_since_deploy, SECONDS_SINCE_DEPLOY_ADDR,
+				SECONDS_SINCE_DEPLOY_SIZE),"DeploySystem-FRAM_write");
 
-		FRAM_write((unsigned char*)&seconds_since_deploy, SECONDS_SINCE_DEPLOY_ADDR,
-				SECONDS_SINCE_DEPLOY_SIZE);
-		if (0 != err) {
-			break;
-		}
+		// collect TLM
 		TelemetryCollectorLogic();
 
-		seconds_since_deploy += 10;
-
+		// reset WDT
 		isis_eps__watchdog__from_t eps_cmd;
 		isis_eps__watchdog__tm(EPS_I2C_BUS_INDEX, &eps_cmd);
 
@@ -172,12 +173,12 @@ int DeploySystem()
 	time_unix deploy_time = 0;
 	Time_getUnixEpoch(&deploy_time);
 	FRAM_write((unsigned char*) deploy_time, DEPLOYMENT_TIME_ADDR,
-	DEPLOYMENT_TIME_SIZE);
+			DEPLOYMENT_TIME_SIZE);
 
 	// set first activation false in FRAM
 	first_activation = FALSE;
 	FRAM_write((unsigned char*) &first_activation,
-	FIRST_ACTIVATION_FLAG_ADDR, FIRST_ACTIVATION_FLAG_SIZE);
+			FIRST_ACTIVATION_FLAG_ADDR, FIRST_ACTIVATION_FLAG_SIZE);
 
 	return 0;
 }
@@ -206,7 +207,12 @@ int InitSubsystems()
 
 	WakeupFromResetCMD();
 
-	logError(SAT_STARTED ,"Sat Started");
+	logError(INFO_MSG ,"Sat Started");
+
+	//time_unix default_no_comm_thresh = (4*60*60);
+	//FRAM_write((unsigned char*) &default_no_comm_thresh , NO_COMM_WDT_KICK_TIME_ADDR , NO_COMM_WDT_KICK_TIME_SIZE);
+
+	vTaskDelay(1000); // rest a little before we start working
 
 	return 0;
 }

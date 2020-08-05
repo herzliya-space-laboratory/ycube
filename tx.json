@@ -269,8 +269,8 @@
               "type": "char",
               "values": [
                 {
-                  "id": "10",
-                  "name": "eps_eng_mb"
+                  "id": "0",
+                  "name": "EPS"
                 },
                 {
                   "id": "1",
@@ -279,6 +279,10 @@
                 {
                   "id": "2",
                   "name": "ANT"
+                },
+                {
+                  "id": "3",
+                  "name": "Solar Panel"
                 },
                 {
                   "id": "4",
@@ -322,8 +326,8 @@
               "type": "char",
               "values": [
                 {
-                  "id": "10",
-                  "name": "eps_eng_mb"
+                  "id": "0",
+                  "name": "EPS"
                 },
                 {
                   "id": "1",
@@ -332,6 +336,10 @@
                 {
                   "id": "2",
                   "name": "ANT"
+                },
+                {
+                  "id": "3",
+                  "name": "Solar Panel"
                 },
                 {
                   "id": "4",
@@ -460,8 +468,8 @@
               "type": "char",
               "values": [
                 {
-                  "id": "10",
-                  "name": "eps_eng_mb"
+                  "id": "0",
+                  "name": "EPS"
                 },
                 {
                   "id": "1",
@@ -506,11 +514,11 @@
         {
           "id": "204",
           "name": "Set TLM period time",
-          "desc": "Set TLM period time",
+          "desc": "Set TLM interval period time",
           "inParams": [
             {
               "name": "tlm_type",
-              "desc": "the type of the telematry to delete ",
+              "desc": "the type of the telematry to update ",
               "type": "char",
               "values": [
                 {
@@ -519,17 +527,17 @@
                 },
                 {
                   "id": "1",
-                  "name": "TRXUV"
+                  "name": "TX"
                 },
                 {
                   "id": "2",
-                  "name": "Antenna"
+                  "name": "ANT"
                 },
-                 {
+                {
                   "id": "3",
                   "name": "Solar Panel"
                 },
-                 {
+                {
                   "id": "4",
                   "name": "WOD"
                 }
@@ -603,6 +611,18 @@
                   "name": "reset_ant_SideB"
                 }
               ]
+            }
+          ]
+        },
+        {
+          "id": "224",
+          "name": "FRAM Write",
+          "desc": "Write value to FRAM and transmit it back",
+          "inParams": [
+            {
+              "name": "Byte data",
+              "desc": "addr(int)+data",
+              "type": "bytes"
             }
           ]
         },

@@ -32,7 +32,8 @@
 #include <satellite-subsystems/isis_eps_driver.h>
 
 #define SKIP_FILE_TIME_SEC 1000000
-#define SD_CARD_DRIVER_PARMS 0
+#define SD_CARD_DRIVER_PRI 0
+#define SD_CARD_DRIVER_SEC 1
 #define FIRST_TIME -1
 
 static char buffer[ MAX_COMMAND_DATA_LENGTH * NUM_ELEMENTS_READ_AT_ONCE]; // buffer for data coming from SD (time+size of data struct)
@@ -176,19 +177,36 @@ int deleteTLMFile(tlm_type_t tlmType, Time date, int days2Add){
 FileSystemResult InitializeFS(Boolean first_time)
 {
 
+	// in FS init we don't want to use a log file !
 	// Initialize the memory for the FS
-	if(logError(hcc_mem_init() ,"InitializeFS-hcc_mem_init")) return -1;
+	int err = hcc_mem_init();
+	if (err != E_NO_SS_ERR){
+		printf("hcc_mem_init error:",err);
+	}
 
 	// Initialize the FS
-	if(logError(fs_init(),"InitializeFS-fs_init")) return -1;
+	err = fs_init();
+	if (err != E_NO_SS_ERR){
+		printf("fs_init error:",err);
+	}
 
 	// Tell the OS (freeRTOS) about our FS
-	if(logError(f_enterFS(),"InitializeFS-f_enterFS")) return -1;
+	err = f_enterFS();
+	if (err != E_NO_SS_ERR){
+		printf("f_enterFS error:",err);
+	}
 
 	// Initialize the volume of SD card 0 (A)
 	// TODO should we also init the volume of SD card 1 (B)???
 	// TODO: why drive 1 is not working when we test it?
-	if(logError(f_initvolume( 0, atmel_mcipdc_initfunc, SD_CARD_DRIVER_PARMS ),"InitializeFS-f_initvolume")) return -1;
+	err=f_initvolume( 0, atmel_mcipdc_initfunc, SD_CARD_DRIVER_PRI );
+	if (err != E_NO_SS_ERR){
+		printf("f_initvolume primary error:",err);
+		err=f_initvolume( 0, atmel_mcipdc_initfunc, SD_CARD_DRIVER_SEC );
+		if (err != E_NO_SS_ERR){
+			printf("f_initvolume secondary error:",err);
+		}
+	}
 
 	//In the first time the SD on. if there is file on the SD delete it.
 	if(first_time) delete_allTMFilesFromSD();
@@ -230,19 +248,19 @@ void getTlmTypeInfo(tlm_type_t tlmType, char* endFileName, int* structSize){
 		memcpy(endFileName,END_FILE_NAME_ANTENNA,sizeof(END_FILE_NAME_ANTENNA));
 		*structSize = sizeof(ISISantsTelemetry);
 	}
-	else if (tlmType==tlm_eps_raw_mb){
+	else if (tlmType==tlm_eps_raw_mb_NOT_USED){
 		memcpy(endFileName,END_FILENAME_EPS_RAW_MB_TLM,sizeof(END_FILENAME_EPS_RAW_MB_TLM));
 		*structSize = sizeof(isis_eps__gethousekeepingraw__from_t);
 	}
-	else if (tlmType==tlm_eps_raw_cdb){
+	else if (tlmType==tlm_eps_raw_cdb_NOT_USED){
 		memcpy(endFileName,END_FILENAME_EPS_RAW_CDB_TLM,sizeof(END_FILENAME_EPS_RAW_CDB_TLM));
 		*structSize = sizeof(isis_eps__gethousekeepingrawincdb__from_t);
 	}
-	else if (tlmType==tlm_eps_eng_mb){
-		memcpy(endFileName,END_FILENAME_EPS_ENG_MB_TLM,sizeof(END_FILENAME_EPS_ENG_MB_TLM));
+	else if (tlmType==tlm_eps){
+		memcpy(endFileName,END_FILENAME_EPS_TLM,sizeof(END_FILENAME_EPS_TLM));
 		*structSize = sizeof(isis_eps__gethousekeepingeng__from_t);
 	}
-	else if (tlmType==tlm_eps_eng_cdb){
+	else if (tlmType==tlm_eps_eng_cdb_NOT_USED){
 		memcpy(endFileName,END_FILENAME_EPS_ENG_CDB_TLM,sizeof(END_FILENAME_EPS_ENG_CDB_TLM));
 		*structSize = sizeof(isis_eps__gethousekeepingengincdb__from_t);
 	}
@@ -283,11 +301,7 @@ int write2File(void* data, tlm_type_t tlmType){
 
 	if (!fp)
 	{
-		char buffer[80];
-		sprintf(buffer, "write2File Unable to open file %s, f_open error=%d",file_name, err);
-		logError(err,buffer);
-		printf(buffer);printf("\n");
-		//printf("Unable to open file %s, f_open error=%d\n",file_name, err);
+		printf("Unable to open file %s, f_open error=%d\n",file_name, err);
 		return -1;
 	}
 
@@ -303,6 +317,7 @@ int write2File(void* data, tlm_type_t tlmType){
 
 // data = timestampe+data (based on tlm type)
 void printTLM(void* element, tlm_type_t tlmType){
+
 #ifdef TESTING
 	int offset = sizeof(int);
 
@@ -432,11 +447,7 @@ int readTLMFile(tlm_type_t tlmType, Time date, int numOfDays,int cmd_id, int res
 
 	if (!fp)
 	{
-		char buffer[80];
-		sprintf(buffer, "readTLMFile Unable to open file %s, f_open error=%d",file_name, err);
-		logError(err,buffer);
-		printf(buffer);printf("\n");
-		//printf("Unable to open file %s, f_open error=%d\n",file_name, err);
+		printf("Unable to open file %s, f_open error=%d\n",file_name, err);
 		return -1;
 	}
 
@@ -504,6 +515,7 @@ int readTLMFiles(tlm_type_t tlmType, Time date, int numOfDays,int cmd_id,int res
 		if(stopDump){
 			break;
 		}
+		vTaskDelay(100);
 	}
 
 	return totalReads;
@@ -534,11 +546,7 @@ int readTLMFileTimeRange(tlm_type_t tlmType,time_t from_time,time_t to_time, int
 
 	if (!fp)
 	{
-		char buffer[80];
-		sprintf(buffer, "readTLMFileTimeRange %s, f_open error=%d",file_name, err);
-		logError(err,buffer);
-		printf(buffer);printf("\n");
-		//printf("Unable to open file %s, f_open error=%d\n",file_name, err);
+		printf("Unable to open file %s, f_open error=%d\n",file_name, err);
 		return -1;
 	}
 

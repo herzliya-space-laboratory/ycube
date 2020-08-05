@@ -79,7 +79,7 @@ int AssembleCommand(unsigned char *data, unsigned short data_length, char type,
 		unsigned short size = 0;
 		if (data_length > MAX_COMMAND_DATA_LENGTH){
 			logError(SPL_DATA_TOO_BIG , "AssembleCommand");
-			size = MAX_COMMAND_DATA_LENGTH;
+			return execution_error;
 		}else{
 			size = data_length;
 		}
@@ -151,6 +151,10 @@ int ActUponCommand(sat_packet_t *cmd)
 	if (NULL == cmd){
 		return E_NOT_INITIALIZED;
 	}
+
+	char buffer [50];
+	sprintf (buffer, "ActUponCommand, cmd id: %d", cmd->ID);
+	logError(INFO_MSG ,buffer);
 
 	switch (cmd->cmd_type)
 	{

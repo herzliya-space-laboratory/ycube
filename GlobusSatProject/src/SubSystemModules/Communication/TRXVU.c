@@ -27,8 +27,9 @@
 
 
 time_unix 		g_mute_end_time = 0;				// time at which the mute will end
-time_unix 		g_idle_end_time = 0;				// time at which the idel will end
+time_unix 		g_idle_end_time = 1;				// time at which the idel will end
 time_unix 		g_transponder_end_time = 0;			// time at which the transponder mode will end
+time_unix       g_max_transponder_time = 259200;    // max time of transponder
 
 xQueueHandle xDumpQueue = NULL;
 xSemaphoreHandle xDumpLock = NULL;
@@ -109,11 +110,7 @@ int InitTrxvu() {
 	myTRXVUBitrates = trxvu_bitrate_9600;
 	if (logError(IsisTrxvu_initialize(&myTRXVUAddress, &myTRXVUFramesLenght,&myTRXVUBitrates, 1) ,"InitTrxvu-IsisTrxvu_initialize") ) return -1;
 
-	vTaskDelay(100);
-
-	if (logError(IsisTrxvu_tcSetAx25Bitrate(ISIS_TRXVU_I2C_BUS_INDEX,myTRXVUBitrates) ,"InitTrxvu-IsisTrxvu_tcSetAx25Bitrate")) return -1;
-	vTaskDelay(100);
-
+	vTaskDelay(1000); // wait a little
 
 	ISISantsI2Caddress myAntennaAddress;
 	myAntennaAddress.addressSideA = ANTS_I2C_SIDE_A_ADDR;
@@ -162,15 +159,13 @@ int TRX_Logic() {
 
 	if (frameCount > 0) {
 		// we have data that came from grand station
-		cmdFound = GetOnlineCommand(&cmd); //--> check - don't reset WDT if we got error getting the frame becuase we will never get a reset !
-		ResetGroundCommWDT();
-
+		cmdFound = GetOnlineCommand(&cmd);
 	}
 
 	if (cmdFound == command_found) {
 		SendAckPacket(ACK_RECEIVE_COMM, &cmd, NULL, 0);
+		ResetGroundCommWDT();
 		err = ActUponCommand(&cmd);
-
 	}
 
 	checkTransponderFinish();
@@ -210,7 +205,12 @@ int GetOnlineCommand(sat_packet_t *cmd)
 			(unsigned char*) receivedFrameData }; // for getting raw data from Rx, nullify values
 
 	if (logError(IsisTrxvu_rcGetCommandFrame(0, &rxFrameCmd) ,"GetOnlineCommand-IsisTrxvu_rcGetCommandFrame")) return -1;
-	// TODO log the RSSI from the frame
+
+	// log frame info
+	char buffer [80];
+	sprintf (buffer, "Frame info: doppler: %d length: %d rssi: %d", rxFrameCmd.rx_doppler,rxFrameCmd.rx_length,rxFrameCmd.rx_rssi);
+	logError(INFO_MSG ,buffer);
+
 	if (logError(ParseDataToCommand(receivedFrameData,cmd),"GetOnlineCommand-ParseDataToCommand")) return -1;
 
 
@@ -412,8 +412,20 @@ int TransmitSplPacket(sat_packet_t *packet, int *avalFrames) {
 		return E_GET_SEMAPHORE_FAILED;
 	}
 
+	int avail=0;
 	err = IsisTrxvu_tcSendAX25DefClSign(ISIS_TRXVU_I2C_BUS_INDEX,
-			(unsigned char*) packet, data_length, (unsigned char*) avalFrames);
+			(unsigned char*) packet, data_length, &avail);
+
+	//printf("avial TRXVU:%d\n",avail);
+
+	if (avail < MIN_TRXVU_BUFF){
+		vTaskDelay(100);
+	}
+
+
+	if (err != E_NO_SS_ERR){
+		logError(err ,"TRXVU-TransmitSplPacket");
+	}
 
 #ifdef TESTING
 	printf("trxvu send ax25 error= %d",err);

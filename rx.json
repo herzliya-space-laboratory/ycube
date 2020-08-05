@@ -110,6 +110,11 @@
               "type": "int"
             },
             {
+              "name": "sat_uptime",
+              "desc": "satellite's up time in seconds",
+              "type": "int"
+            },
+            {
               "name": "number_of_cmd_resets",
               "desc": "number of resets the satellite has gone through",
               "type": "int"
@@ -438,9 +443,9 @@
       "desc": "All DUMP Types",
       "subtypes": [
         {
-          "id": "10",
-          "name": "tlm_eps_eng_mb",
-          "desc": "EPS eng data",
+          "id": "0",
+          "name": "tlm_eps",
+          "desc": "EPS data",
           "inParams": [
             {
               "name": "timestamp",
@@ -871,32 +876,32 @@
             {
               "name": "Solar panel 1 Temperature",
               "desc": "",
-              "type": "short"
+              "type": "int"
             },
             {
               "name": "Solar panel 2 Temperature",
               "desc": "",
-              "type": "short"
+              "type": "int"
             },
             {
               "name": "Solar panel 3 Temperature",
               "desc": "",
-              "type": "short"
+              "type": "int"
             },
             {
               "name": "Solar panel 4 Temperature",
               "desc": "",
-              "type": "short"
+              "type": "int"
             },
             {
               "name": "Solar panel 5 Temperature",
               "desc": "",
-              "type": "short"
+              "type": "int"
             },
             {
               "name": "Solar panel 6 Temperature",
               "desc": "",
-              "type": "short"
+              "type": "int"
             },
             {
               "name": "sat_time",
@@ -918,6 +923,11 @@
               "desc": "number of resets the satellite has gone through",
               "type": "int"
             },
+            {
+              "name": "sat_uptime",
+              "desc": "satellite's up time in seconds",
+              "type": "int"
+            },			
             {
               "name": "number_of_cmd_resets",
               "desc": "number of resets the satellite has gone through",
@@ -951,6 +961,48 @@
           ]
         },
 		
+        {
+          "id": "3",
+          "name": "Solar Panels",
+          "desc": "Solar Panels TLM DATA",
+          "inParams": [
+            {
+              "name": "timestamp",
+              "desc": "timestamp",
+              "type": "datetime"
+            },
+            {
+              "name": "Solar panel 1 Temperature",
+              "desc": "",
+              "type": "int"
+            },
+            {
+              "name": "Solar panel 2 Temperature",
+              "desc": "",
+              "type": "int"
+            },
+            {
+              "name": "Solar panel 3 Temperature",
+              "desc": "",
+              "type": "int"
+            },
+            {
+              "name": "Solar panel 4 Temperature",
+              "desc": "",
+              "type": "int"
+            },
+            {
+              "name": "Solar panel 5 Temperature",
+              "desc": "",
+              "type": "int"
+            },
+            {
+              "name": "Solar panel 6 Temperature",
+              "desc": "",
+              "type": "int"
+            }
+          ]
+        },
 
         {
           "id": "2",
@@ -1238,6 +1290,30 @@
             }
           ]
         },
+        {
+          "id": "225",
+          "name": "FRAM Read",
+          "desc": "Read FRAM value and transmit it",
+          "inParams": [
+            {
+              "name": "Byte data",
+              "desc": "data to read",
+              "type": "bytes"
+            }
+          ]
+        },		
+        {
+          "id": "224",
+          "name": "FRAM Wtite",
+          "desc": "Write FRAM value and transmit it",
+          "inParams": [
+            {
+              "name": "Byte data",
+              "desc": "data to read",
+              "type": "bytes"
+            }
+          ]
+        },		
         {
           "id": "227",
           "name": "Get Sat Uptime",
