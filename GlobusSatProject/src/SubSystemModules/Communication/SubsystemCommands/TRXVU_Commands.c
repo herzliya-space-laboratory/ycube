@@ -57,6 +57,9 @@ void DumpTask(void *args) {
 int CMD_AntennaDeploy(sat_packet_t *cmd)
 {
 
+	printf("******* ANT DEPLOY - ANT DEPLOY - ANT DEPLOY - ANT DEPLOY\n");
+	logError(INFO_MSG,"ANT DEPLOY - ANT DEPLOY - ANT DEPLOY");
+
 	return 0; // TODO RBF - now that we have the ANT installed, want to make sure we don't deploy by mistake
 	/*
 	int err = logError(IsisAntS_setArmStatus(ISIS_TRXVU_I2C_BUS_INDEX , isisants_sideA, isisants_arm) ,"CMD_AntennaDeploy-IsisAntS_setArmStatus-A");
@@ -149,7 +152,6 @@ int CMD_SetTransponder(sat_packet_t *cmd)
 
 	//memcpy(data[1],cmd->data[0],sizeof(char)); //data[1] = 0x02 - transponder or data[1] = 0x01 - nominal
 
-	err = I2C_write(I2C_TRXVU_TC_ADDR, data, 2);
 
 	if(data[1] == trxvu_transponder_on){
 		time_unix curr_tick_time = 0;
@@ -157,16 +159,17 @@ int CMD_SetTransponder(sat_packet_t *cmd)
 		if (curr_tick_time < g_mute_end_time) return TRXVU_TRANSPONDER_WHILE_MUTE;
 		SetIdleState(trxvu_idle_state_off, 0);
 		memcpy(&duration,cmd->data + sizeof(char),sizeof(duration));
-		if(duration > g_max_transponder_time) return TRXVU_TRANSPONDER_TOO_LONG;
+		if(duration > MAX_TRANS_TIME) return TRXVU_TRANSPONDER_TOO_LONG;
 
+		err = I2C_write(I2C_TRXVU_TC_ADDR, data, 2);
 		g_transponder_end_time = curr_tick_time + duration;
 
 	}else if (data[1] == trxvu_transponder_off){
+		err = I2C_write(I2C_TRXVU_TC_ADDR, data, 2);
 		g_transponder_end_time = 0;
 
 	}else {
-		err = E_INVALID_PARAMETERS;
-		SendAckPacket(ACK_ERROR_MSG, cmd, (unsigned char*) &err, sizeof(err));
+		return E_INVALID_PARAMETERS;
 	}
 
 	if (err == E_NO_SS_ERR)

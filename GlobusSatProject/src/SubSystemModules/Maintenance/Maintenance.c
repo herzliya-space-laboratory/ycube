@@ -27,7 +27,7 @@
 #include <math.h>
 
 
-static time_unix lastDeploy = 0;
+time_unix lastDeploy = 0;
 
 Boolean CheckExecutionTime(time_unix prev_time, time_unix period)
 {
@@ -148,8 +148,7 @@ int SetGsWdtKickTime(time_unix new_gs_wdt_kick_time)
 time_unix GetGsWdtKickTime()
 {
 	time_unix no_comm_thresh = 0;
-	FRAM_read((unsigned char*)&no_comm_thresh, NO_COMM_WDT_KICK_TIME_ADDR,
-	NO_COMM_WDT_KICK_TIME_SIZE);
+	FRAM_read((unsigned char*)&no_comm_thresh, NO_COMM_WDT_KICK_TIME_ADDR,NO_COMM_WDT_KICK_TIME_SIZE);
 	return no_comm_thresh;
 }
 
@@ -205,7 +204,12 @@ void DeployAnt(){
 
 	Boolean flag;
 	FRAM_read((unsigned char*) &flag, STOP_REDEPOLOY_FLAG_ADDR,STOP_REDEPOLOY_FLAG_SIZE);
-	//printf("STOP_REDEPOLOY_FLAG_ADDR: %d \n",flag);
+
+	// if we don't have any last deploy time, than take the first deploy time from FRAM
+	if (lastDeploy==0){
+		FRAM_read((unsigned char*) &lastDeploy, DEPLOYMENT_TIME_ADDR,
+				DEPLOYMENT_TIME_SIZE);
+	}
 
 	if (!flag  && CheckExecutionTime(lastDeploy,DEPLOY_INTRAVAL)){
 		CMD_AntennaDeploy(NULL);

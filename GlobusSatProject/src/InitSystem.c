@@ -9,6 +9,7 @@
 #include "GlobalStandards.h"
 #include "SubSystemModules/PowerManagment/EPS.h"
 #include "SubSystemModules/Communication/TRXVU.h"
+#include "SubSystemModules/Communication/SubsystemCommands/TRXVU_Commands.h"
 #include "SubSystemModules/Maintenance/Maintenance.h"
 #include "InitSystem.h"
 #include "TLM_management.h"
@@ -28,8 +29,7 @@
 Boolean isFirstActivation()
 {
 	Boolean flag = FALSE;
-	FRAM_read((unsigned char*) &flag, FIRST_ACTIVATION_FLAG_ADDR,
-	FIRST_ACTIVATION_FLAG_SIZE);
+	FRAM_read((unsigned char*) &flag, FIRST_ACTIVATION_FLAG_ADDR,FIRST_ACTIVATION_FLAG_SIZE);
 	return flag;
 }
 
@@ -84,9 +84,6 @@ void WriteDefaultValuesToFRAM()
 	FRAM_write((unsigned char*) &num_of_resets,
 	DEL_OLD_FILES_NUM_DAYS_ADDR, DEL_OLD_FILES_NUM_DAYS_SIZE);
 
-	FRAM_write((unsigned char*) &num_of_resets,
-			SECONDS_SINCE_DEPLOY_ADDR, SECONDS_SINCE_DEPLOY_SIZE);
-
 	Boolean flag = FALSE;
 	FRAM_write((unsigned char*) &flag,
 			STOP_REDEPOLOY_FLAG_ADDR, STOP_REDEPOLOY_FLAG_SIZE);
@@ -129,6 +126,9 @@ int StartTIME()
 	return 0;
 }
 
+
+
+//TODO: before send to flight: 1. set FIRST_ACTIVATION flag to TRUE 2. set SECONDS_SINCE_DEPLOY to 0
 int DeploySystem()
 {
 	Boolean first_activation = isFirstActivation();
@@ -136,7 +136,7 @@ int DeploySystem()
 	// if this is not a first activation, than nothing to do here... return
 	if (!first_activation) return 0;
 
-
+	logError(INFO_MSG,"Deploy first activation");
 	// write default values to FRAM
 	WriteDefaultValuesToFRAM();
 
@@ -145,12 +145,13 @@ int DeploySystem()
 
 	time_unix seconds_since_deploy = 0;
 	err = logError(FRAM_read((unsigned char*) &seconds_since_deploy , SECONDS_SINCE_DEPLOY_ADDR , SECONDS_SINCE_DEPLOY_SIZE) ,"DeploySystem-FRAM_read");
-	if (err == E_NO_SS_ERR) {
+	if (err != E_NO_SS_ERR) {
 		seconds_since_deploy = 0;
 	}
 
 	// wait 30 min + log telm
 	while (seconds_since_deploy < MINUTES_TO_SECONDS(MIN_2_WAIT_BEFORE_DEPLOY)) { // RBF to 30 min
+		logError(INFO_MSG,"Deploy wait loop start");
 		// wait 10 sec and update timer in FRAM
 		vTaskDelay(SECONDS_TO_TICKS(10));
 		seconds_since_deploy += 10;
@@ -165,6 +166,7 @@ int DeploySystem()
 		isis_eps__watchdog__tm(EPS_I2C_BUS_INDEX, &eps_cmd);
 
 	}
+	logError(INFO_MSG,"Deploy wait loop - DONE");
 
 	// open ants !
 	CMD_AntennaDeploy(NULL);
@@ -172,7 +174,7 @@ int DeploySystem()
 	// set deploy time in FRAM
 	time_unix deploy_time = 0;
 	Time_getUnixEpoch(&deploy_time);
-	FRAM_write((unsigned char*) deploy_time, DEPLOYMENT_TIME_ADDR,
+	FRAM_write((unsigned char*) &deploy_time, DEPLOYMENT_TIME_ADDR,
 			DEPLOYMENT_TIME_SIZE);
 
 	// set first activation false in FRAM
@@ -184,7 +186,6 @@ int DeploySystem()
 }
 
 
-#define PRINT_IF_ERR(method) if(0 != err)printf("error in '" #method  "' err = %d\n",err);
 int InitSubsystems()
 {
 	StartI2C();
@@ -208,9 +209,6 @@ int InitSubsystems()
 	WakeupFromResetCMD();
 
 	logError(INFO_MSG ,"Sat Started");
-
-	//time_unix default_no_comm_thresh = (4*60*60);
-	//FRAM_write((unsigned char*) &default_no_comm_thresh , NO_COMM_WDT_KICK_TIME_ADDR , NO_COMM_WDT_KICK_TIME_SIZE);
 
 	vTaskDelay(1000); // rest a little before we start working
 
