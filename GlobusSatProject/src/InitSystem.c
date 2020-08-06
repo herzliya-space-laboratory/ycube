@@ -89,6 +89,8 @@ void WriteDefaultValuesToFRAM()
 			STOP_REDEPOLOY_FLAG_ADDR, STOP_REDEPOLOY_FLAG_SIZE);
 
 	ResetGroundCommWDT();
+
+	setMuteEndTime(0);
 }
 
 int StartFRAM()
@@ -128,7 +130,7 @@ int StartTIME()
 
 
 
-//TODO: before send to flight: 1. set FIRST_ACTIVATION flag to TRUE 2. set SECONDS_SINCE_DEPLOY to 0
+//TODO: before sent to flight: 1. set FIRST_ACTIVATION flag to TRUE 2. set SECONDS_SINCE_DEPLOY to 0
 int DeploySystem()
 {
 	Boolean first_activation = isFirstActivation();
@@ -149,12 +151,20 @@ int DeploySystem()
 		seconds_since_deploy = 0;
 	}
 
+	time_unix startTime = 0;
+	Time_getUnixEpoch(&startTime);
+	startTime -= seconds_since_deploy;
+
 	// wait 30 min + log telm
 	while (seconds_since_deploy < MINUTES_TO_SECONDS(MIN_2_WAIT_BEFORE_DEPLOY)) { // RBF to 30 min
 		logError(INFO_MSG,"Deploy wait loop start");
 		// wait 10 sec and update timer in FRAM
 		vTaskDelay(SECONDS_TO_TICKS(10));
-		seconds_since_deploy += 10;
+
+		time_unix currTime = 0;
+		Time_getUnixEpoch(&currTime);
+		seconds_since_deploy = currTime - startTime;
+
 		logError(FRAM_write((unsigned char*)&seconds_since_deploy, SECONDS_SINCE_DEPLOY_ADDR,
 				SECONDS_SINCE_DEPLOY_SIZE),"DeploySystem-FRAM_write");
 
