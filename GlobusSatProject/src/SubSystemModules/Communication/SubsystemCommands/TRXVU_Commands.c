@@ -8,6 +8,9 @@
 #include "TRXVU_Commands.h"
 #include "TLM_management.h"
 
+#ifdef ISISEPS
+	#include <satellite-subsystems/isis_eps_driver.h>
+#endif
 
 extern xTaskHandle xDumpHandle;			                //task handle for dump task
 extern xSemaphoreHandle xDumpLock;                      // this global lock is defined once in TRXVU.c
@@ -54,9 +57,15 @@ void DumpTask(void *args) {
 int CMD_AntennaDeploy(sat_packet_t *cmd)
 {
 
-	printf("******* ANT DEPLOY - ANT DEPLOY - ANT DEPLOY - ANT DEPLOY\n");
 	logError(INFO_MSG,"ANT DEPLOY - ANT DEPLOY - ANT DEPLOY");
+	while (TRUE)
+	{
+		printf("******* ANT DEPLOY - ANT DEPLOY - ANT DEPLOY - ANT DEPLOY\n");
+		isis_eps__gethousekeepingengincdb__from_t hk_tlm;
+		isis_eps__gethousekeepingengincdb__tm(EPS_I2C_BUS_INDEX, &hk_tlm);
 
+		vTaskDelay(SECONDS_TO_TICKS(10));
+	}
 	return 0; // TODO RBF - now that we have the ANT installed, want to make sure we don't deploy by mistake
 	/*
 	int err = logError(IsisAntS_setArmStatus(ISIS_TRXVU_I2C_BUS_INDEX , isisants_sideA, isisants_arm) ,"CMD_AntennaDeploy-IsisAntS_setArmStatus-A");
