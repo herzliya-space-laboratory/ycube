@@ -92,8 +92,6 @@ int CMD_StartDump(sat_packet_t *cmd)
 		return -1;
 	}
 
-
-
 	//dump_arguments_t *dmp_pckt = malloc(sizeof(*dmp_pckt));
 	unsigned int offset = 0;
 
@@ -155,18 +153,34 @@ int CMD_SetTransponder(sat_packet_t *cmd)
 
 	data[0] = 0x38;
 	data[1] = cmd->data[0];
-
 	//memcpy(data[1],cmd->data[0],sizeof(char)); //data[1] = 0x02 - transponder or data[1] = 0x01 - nominal
 
+	unsigned short rssiValue = 1;
+	byte param[2];
+	byte SetRSSIdata[3];
 
 	if(data[1] == trxvu_transponder_on){
+		// Step 1: Turn idle off ,check if sat suppose to be muted, and check if it passes the limited time
 		time_unix curr_tick_time = 0;
 		Time_getUnixEpoch(&curr_tick_time);
 		if (curr_tick_time < getMuteEndTime()) return TRXVU_TRANSPONDER_WHILE_MUTE;
-		SetIdleState(trxvu_idle_state_off, 0);
+
 		memcpy(&duration,cmd->data + sizeof(char),sizeof(duration));
 		if(duration > MAX_TRANS_TIME) return TRXVU_TRANSPONDER_TOO_LONG;
 
+		SetIdleState(trxvu_idle_state_off, 0);
+		vTaskDelay(100);
+
+
+
+		// Step 2: Set RSSI to 1
+		memcpy(param, &rssiValue, 2);
+		SetRSSIdata[0] = 0x52;
+		SetRSSIdata[1] = param[0];
+		SetRSSIdata[2] = param[1];
+		err = I2C_write(I2C_TRXVU_TC_ADDR, SetRSSIdata, 2);
+
+		// Step 3: Turn on transponder using I2C_write function
 		err = I2C_write(I2C_TRXVU_TC_ADDR, data, 2);
 		setTransponderEndTime(curr_tick_time + duration);
 
