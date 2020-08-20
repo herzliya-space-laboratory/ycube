@@ -54,9 +54,11 @@ void DumpTask(void *args) {
 int CMD_AntennaDeploy(sat_packet_t *cmd)
 {
 
-	printf("******* ANT DEPLOY - ANT DEPLOY - ANT DEPLOY - ANT DEPLOY\n");
-	logError(INFO_MSG,"ANT DEPLOY - ANT DEPLOY - ANT DEPLOY");
-
+	while (TRUE)
+	{
+		printf("******* REMARK - ANT DEPLOY - ANT DEPLOY - ANT DEPLOY - ANT DEPLOY\n");
+		vTaskDelay(SECONDS_TO_TICKS(10));
+	}
 	return 0; // TODO RBF - now that we have the ANT installed, want to make sure we don't deploy by mistake
 	/*
 	int err = logError(IsisAntS_setArmStatus(ISIS_TRXVU_I2C_BUS_INDEX , isisants_sideA, isisants_arm) ,"CMD_AntennaDeploy-IsisAntS_setArmStatus-A");
@@ -160,6 +162,7 @@ int CMD_SetTransponder(sat_packet_t *cmd)
 
 		err = I2C_write(I2C_TRXVU_TC_ADDR, data, 2);
 		setTransponderEndTime(curr_tick_time + duration);
+		logError(INFO_MSG,"Transponder ON\n");
 
 	}else if (data[1] == trxvu_transponder_off){
 		err = I2C_write(I2C_TRXVU_TC_ADDR, data, 2);
@@ -182,7 +185,7 @@ int CMD_SetRSSITransponder(sat_packet_t *cmd)
 	char data[1+sizeof(short)] = {0};
 
 	data[0] = 0x52;
-	data[1] = cmd->data[0]; // TODO: ask if we send the RSSI value in the correct order, doc says: "The most significant byte is transmitted first - big endian"
+	data[1] = cmd->data[0];
 	data[2] = cmd->data[1];
 	//memcpy(&data[1],cmd->data[0],sizeof(short));
 	err = I2C_write(I2C_TRXVU_TC_ADDR, data, sizeof(data));

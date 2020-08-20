@@ -143,6 +143,7 @@ int InitTrxvu() {
 	InitTxModule();
 	InitBeaconParams();
 	InitSemaphores();
+	checkTransponderStart();// lets see if we need to turn on the transponder
 
 
 	return 0;
@@ -156,7 +157,6 @@ void checkIdleFinish(){
 	if (g_idle_end_time !=0 && g_idle_end_time < curr_tick_time){
 		g_idle_end_time = 0;
 		SetIdleState(trxvu_idle_state_off,0);
-		logError(INFO_MSG,"idle off");
 	}
 }
 
@@ -172,6 +172,20 @@ void checkTransponderFinish(){
 		data[1] = trxvu_transponder_off;
 		I2C_write(I2C_TRXVU_TC_ADDR, data, 2);
 		logError(INFO_MSG,"transponder off");
+	}
+}
+
+void checkTransponderStart(){
+	time_unix curr_tick_time = 0;
+	Time_getUnixEpoch(&curr_tick_time);
+
+	// check if we need to turn on the transponder...
+	if (getTransponderEndTime() != 0 && getTransponderEndTime() > curr_tick_time){
+		char data[2] = {0, 0};
+		data[0] = 0x38;
+		data[1] = trxvu_transponder_on;
+		I2C_write(I2C_TRXVU_TC_ADDR, data, 2);
+		logError(INFO_MSG,"transponder on");
 	}
 }
 
@@ -376,8 +390,11 @@ int SetIdleState(ISIStrxvuIdleState state, time_unix duration){
 	int err = logError(IsisTrxvu_tcSetIdlestate(ISIS_TRXVU_I2C_BUS_INDEX, state) ,"SetIdleState-IsisTrxvu_tcSetIdlestate");
 
 	if (err == E_NO_SS_ERR && state == trxvu_idle_state_on){
-		// set mute end time
+		logError(INFO_MSG,"Idel ON\n");
+		// set idle end time
 		g_idle_end_time = curr_tick_time + duration;
+	} else if (err == E_NO_SS_ERR && state == trxvu_idle_state_off){
+		logError(INFO_MSG,"Idel OFF\n");
 	}
 	return err;
 
